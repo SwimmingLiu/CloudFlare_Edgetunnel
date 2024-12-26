@@ -3,7 +3,8 @@ import { connect } from 'cloudflare:sockets';
 
 let userID = '';
 let proxyIP = '';
-let sub = 'vmess2clash.pages.dev/?serect_key=swimmingliu&';
+let sub = 'vmess2clash.pages.dev/?serect_key=swimmingliu';
+let sub_url = sub;
 let subConverter = 'SUBAPI.fxxk.dedyn.io';
 let subConfig = "https://raw.githubusercontent.com/SwimmingLiu/ClashConfig/master/ACL4SSR_Online_Full_MultiMode.ini";
 let subProtocol = 'https';
@@ -1212,7 +1213,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('U3dpbW1pbmdMaXUlMjBDbG91ZEZsYXJlJTIwVlBOJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnN3aW1taW5nbGl1LmNuJTI3JTNFU3dpbW1pbmdMaXUuY24lM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIz'));
+const cmad = decodeURIComponent(atob('U3dpbW1pbmdMaXUlMjBWUE4lM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGc3dpbW1pbmdsaXUuY24lMjclM0VTd2ltbWluZ0xpdS5jbiUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQ=='));
 /**
  * @param {string} userID
  * @param {string | null} hostName
@@ -1368,6 +1369,8 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, env
 			################################################################<br>
 			Subscribe / sub 订阅地址, 点击链接自动 <strong>复制订阅链接</strong> 并 <strong>生成订阅二维码</strong> <br>
 			---------------------------------------------------------------<br>
+			${cmad}
+			---------------------------------------------------------------<br>
 			自适应订阅地址:<br>
 			<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${proxyhost}${hostName}/${uuid}</a><br>
 			<div id="qrcode_0" style="margin: 10px 10px 10px 10px;"></div>
@@ -1451,7 +1454,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, env
 			${clash}<br>
 			---------------------------------------------------------------<br>
 			################################################################<br>
-			${cmad}
 			`;
 		return 节点配置页;
 	} else {
@@ -1481,7 +1483,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, env
 			fakeHostName = `${fakeHostName}.xyz`
 		}
 		console.log(`虚假HOST: ${fakeHostName}`);
-		let url = `${subProtocol}://${sub}`;
+		let url = `${subProtocol}://${sub_url}`;
 		let isBase64 = true;
 
 		if (!sub || sub == "") {
@@ -1536,15 +1538,13 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, env
 			} else {
 				const response = await fetch(url, {
 					headers: {
-						'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
+						'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9Td2ltbWluZ0xpdQ==')
 					}
 				});
 				content = await response.text();
 			}
 
-			if (_url.pathname == `/${fakeUserID}`) return content;
-
-			return 恢复伪装信息(content, userID, hostName, isBase64);
+			return content;
 
 		} catch (error) {
 			console.error('Error fetching content:', error);
