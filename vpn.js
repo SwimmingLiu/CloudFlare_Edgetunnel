@@ -3,7 +3,7 @@ import { connect } from 'cloudflare:sockets';
 
 let userID = '';
 let proxyIP = '';
-let sub = 'vmess2clash.pages.dev/?serect_key=swimmingliu';
+let sub = 'vmess2clash.pages.dev%2F%3Fserect_key%3Dswimmingliu';
 let subConverter = 'SUBAPI.fxxk.dedyn.io';
 let subConfig = "https://raw.githubusercontent.com/SwimmingLiu/ClashConfig/master/ACL4SSR_Online_Full_MultiMode.ini";
 let subProtocol = 'https';
@@ -31,7 +31,7 @@ let addressesnotlsapi = [];
 let addressescsv = [];
 let DLS = 8;
 let remarkIndex = 1;//CSV备注所在列偏移量
-let FileName = atob('c3dpbW1pbmdsaXUtdnBu');
+let FileName = atob('U3dpbW1pbmdMaXUtVlBO');
 let BotToken;
 let ChatID;
 let proxyhosts = [];
