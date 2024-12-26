@@ -3,7 +3,7 @@ import { connect } from 'cloudflare:sockets';
 
 let userID = '';
 let proxyIP = '';
-let sub = 'vmess2clash.pages.dev%2F%3Fserect_key%3Dswimmingliu';
+let sub = 'vmess2clash.pages.dev/?serect_key=swimmingliu&';
 let subConverter = 'SUBAPI.fxxk.dedyn.io';
 let subConfig = "https://raw.githubusercontent.com/SwimmingLiu/ClashConfig/master/ACL4SSR_Online_Full_MultiMode.ini";
 let subProtocol = 'https';
