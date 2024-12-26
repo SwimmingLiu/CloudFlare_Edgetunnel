@@ -3,9 +3,9 @@ import { connect } from 'cloudflare:sockets';
 
 let userID = '';
 let proxyIP = '';
-let sub = '';
+let sub = 'vmess2clash.pages.dev/?serect_key=swimmingliu';
 let subConverter = 'SUBAPI.fxxk.dedyn.io';
-let subConfig = "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Mini_MultiMode.ini";
+let subConfig = "https://raw.githubusercontent.com/SwimmingLiu/ClashConfig/master/ACL4SSR_Online_Full_MultiMode.ini";
 let subProtocol = 'https';
 let subEmoji = 'true';
 let socks5Address = '';
@@ -31,7 +31,7 @@ let addressesnotlsapi = [];
 let addressescsv = [];
 let DLS = 8;
 let remarkIndex = 1;//CSV备注所在列偏移量
-let FileName = atob('ZWRnZXR1bm5lbA==');
+let FileName = atob('c3dpbW1pbmdsaXUtdnBu');
 let BotToken;
 let ChatID; 
 let proxyhosts = [];
@@ -1212,7 +1212,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub','base64','b64','clash','singbox','sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('U3dpbW1pbmdMaXUlMjBDbG91ZEZsYXJlJTIwVlBOJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnN3aW1taW5nbGl1LmNuJTI3JTNFU3dpbW1pbmdMaXUuY24lM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIzJTIz'));
 /**
  * @param {string} userID
  * @param {string | null} hostName
@@ -1366,7 +1366,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, env
 		const 动态UUID信息 = (uuid != userID) ? `TOKEN: ${uuid}<br>UUIDNow: ${userID}<br>UUIDLow: ${userIDLow}<br>${userIDTime}TIME（动态UUID有效时间）: ${有效时间} 天<br>UPTIME（动态UUID更新时间）: ${更新时间} 时（北京时间）<br><br>` : `${userIDTime}`;
 		const 节点配置页 = `
 			################################################################<br>
-			Subscribe / sub 订阅地址, 支持 Base64、clash-meta、sing-box 订阅格式<br>
+			[SwimmingLiu's Subscribe] Subscribe / sub 订阅地址, 支持 Base64、clash-meta、sing-box 订阅格式<br>
 			---------------------------------------------------------------<br>
 			自适应订阅地址:<br>
 			<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${proxyhost}${hostName}/${uuid}</a><br>
