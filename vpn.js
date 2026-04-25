@@ -233,6 +233,8 @@ function pruneEmptyClashGroups(content) {
 	return rebuiltLines.join('\n');
 }
 
+// 线上节点转换
+
 let userID = '';
 let proxyIP = '';
 let sub = 'vmess2clash.pages.dev/?serect_key=swimmingliu';
