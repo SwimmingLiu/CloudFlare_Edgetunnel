@@ -4,7 +4,7 @@ import { connect } from 'cloudflare:sockets';
 function pruneEmptyClashGroups(content) {
 	const groupSectionPattern = /^(proxy-groups|Proxy Group):\s*$/;
 	const topLevelKeyPattern = /^[^\s#][^:]*:\s*(?:#.*)?$/;
-	const groupStartPattern = /^\s*-\s+/;
+	const groupStartPattern = /^(\s*)-\s+/;
 	const countryGroupPattern = /^\p{Regional_Indicator}{2}\s/u;
 
 	function splitGroupItems(listText) {
@@ -13,6 +13,10 @@ function pruneEmptyClashGroups(content) {
 			.map(item => item.trim())
 			.filter(Boolean)
 			.map(item => item.replace(/^['"]|['"]$/g, ''));
+	}
+
+	function getIndentLength(line) {
+		return (line.match(/^(\s*)/) || ['', ''])[1].length;
 	}
 
 	function readGroupSection(lines, startIndex) {
@@ -36,12 +40,31 @@ function pruneEmptyClashGroups(content) {
 		};
 	}
 
-	function splitGroupBlocks(sectionLines) {
+	function detectGroupIndentLength(sectionLines) {
+		let indentLength = null;
+
+		for (const line of sectionLines) {
+			const match = line.match(groupStartPattern);
+			if (!match) {
+				continue;
+			}
+
+			const currentIndent = match[1].length;
+			if (indentLength === null || currentIndent < indentLength) {
+				indentLength = currentIndent;
+			}
+		}
+
+		return indentLength ?? 0;
+	}
+
+	function splitGroupBlocks(sectionLines, groupIndentLength) {
 		const blocks = [];
 		let currentLines = [];
 
 		for (const line of sectionLines) {
-			if (groupStartPattern.test(line)) {
+			const match = line.match(groupStartPattern);
+			if (match && match[1].length === groupIndentLength) {
 				if (currentLines.length > 0) {
 					blocks.push(currentLines);
 				}
@@ -63,22 +86,93 @@ function pruneEmptyClashGroups(content) {
 
 	function parseGroupBlock(blockLines) {
 		const text = blockLines.join('\n');
-		const nameMatch = text.match(/name:\s*([^,\n}]+?)(?=\s*,\s*type:)/s);
-		const proxiesMatch = text.match(/proxies:\s*\[([\s\S]*?)\]/m);
+		const flowNameMatch = text.match(/name:\s*([^,\n}]+?)(?=\s*,\s*type:)/s);
+		const flowProxiesMatch = text.match(/proxies:\s*\[([\s\S]*?)\]/m);
 
-		if (!nameMatch || !proxiesMatch) {
+		if (flowNameMatch && flowProxiesMatch) {
+			return {
+				style: 'flow',
+				text,
+				lines: blockLines,
+				name: flowNameMatch[1].trim().replace(/^['"]|['"]$/g, ''),
+				proxies: splitGroupItems(flowProxiesMatch[1]),
+			};
+		}
+
+		const nameLine = blockLines.find(line => /^\s*-\s*name:\s*/.test(line));
+		const proxiesIndex = blockLines.findIndex(line => /^\s*proxies:\s*(?:\[\s*\])?\s*$/.test(line));
+
+		if (!nameLine || proxiesIndex === -1) {
 			return null;
 		}
 
+		const name = nameLine
+			.replace(/^\s*-\s*name:\s*/, '')
+			.trim()
+			.replace(/^['"]|['"]$/g, '');
+
+		const proxiesKeyIndent = getIndentLength(blockLines[proxiesIndex]);
+		let proxyItemIndent = null;
+		const proxies = [];
+
+		for (let index = proxiesIndex + 1; index < blockLines.length; index += 1) {
+			const line = blockLines[index];
+			if (!line.trim()) {
+				continue;
+			}
+
+			const indentLength = getIndentLength(line);
+			if (indentLength <= proxiesKeyIndent) {
+				break;
+			}
+
+			const itemMatch = line.match(/^\s*-\s*(.*)$/);
+			if (!itemMatch) {
+				continue;
+			}
+
+			if (proxyItemIndent === null) {
+				proxyItemIndent = indentLength;
+			}
+
+			proxies.push(itemMatch[1].trim().replace(/^['"]|['"]$/g, ''));
+		}
+
 		return {
+			style: 'block',
 			text,
-			name: nameMatch[1].trim().replace(/^['"]|['"]$/g, ''),
-			proxies: splitGroupItems(proxiesMatch[1]),
+			lines: blockLines,
+			name,
+			proxies,
+			proxiesIndex,
+			proxiesKeyIndent,
+			proxyItemIndent: proxyItemIndent ?? proxiesKeyIndent + 2,
 		};
 	}
 
-	function replaceProxies(blockText, proxies) {
-		return blockText.replace(/proxies:\s*\[[\s\S]*?\]/m, `proxies: [${proxies.join(', ')}]`);
+	function renderGroupBlock(group, proxies) {
+		if (group.style === 'flow') {
+			return group.text.replace(/proxies:\s*\[[\s\S]*?\]/m, `proxies: [${proxies.join(', ')}]`);
+		}
+
+		const lines = group.lines.slice();
+		const head = lines.slice(0, group.proxiesIndex + 1);
+		let tailStart = lines.length;
+
+		for (let index = group.proxiesIndex + 1; index < lines.length; index += 1) {
+			const line = lines[index];
+			if (!line.trim()) {
+				continue;
+			}
+
+			if (getIndentLength(line) <= group.proxiesKeyIndent) {
+				tailStart = index;
+				break;
+			}
+		}
+
+		const proxyLines = proxies.map(name => `${' '.repeat(group.proxyItemIndent)}- ${name}`);
+		return [...head, ...proxyLines, ...lines.slice(tailStart)].join('\n');
 	}
 
 	const lines = content.split('\n');
@@ -89,7 +183,8 @@ function pruneEmptyClashGroups(content) {
 	}
 
 	const { startIndex, endIndex, sectionLines } = readGroupSection(lines, sectionStartIndex);
-	const parsedBlocks = splitGroupBlocks(sectionLines)
+	const groupIndentLength = detectGroupIndentLength(sectionLines);
+	const parsedBlocks = splitGroupBlocks(sectionLines, groupIndentLength)
 		.map(parseGroupBlock)
 		.filter(Boolean);
 
@@ -126,7 +221,7 @@ function pruneEmptyClashGroups(content) {
 		.filter(group => !deletedGroupNames.has(group.name))
 		.map(group => {
 			const remainingProxies = group.proxies.filter(proxyName => !deletedGroupNames.has(proxyName));
-			return replaceProxies(group.text, remainingProxies);
+			return renderGroupBlock(group, remainingProxies);
 		});
 
 	const rebuiltLines = [
