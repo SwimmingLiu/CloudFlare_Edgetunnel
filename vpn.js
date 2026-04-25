@@ -1,6 +1,143 @@
 
 import { connect } from 'cloudflare:sockets';
 
+function pruneEmptyClashGroups(content) {
+	const groupSectionPattern = /^(proxy-groups|Proxy Group):\s*$/;
+	const topLevelKeyPattern = /^[^\s#][^:]*:\s*(?:#.*)?$/;
+	const groupStartPattern = /^\s*-\s+/;
+	const countryGroupPattern = /^\p{Regional_Indicator}{2}\s/u;
+
+	function splitGroupItems(listText) {
+		return listText
+			.split(',')
+			.map(item => item.trim())
+			.filter(Boolean)
+			.map(item => item.replace(/^['"]|['"]$/g, ''));
+	}
+
+	function readGroupSection(lines, startIndex) {
+		let endIndex = lines.length;
+
+		for (let index = startIndex + 1; index < lines.length; index += 1) {
+			const line = lines[index];
+			if (!line.trim()) {
+				continue;
+			}
+			if (topLevelKeyPattern.test(line)) {
+				endIndex = index;
+				break;
+			}
+		}
+
+		return {
+			startIndex,
+			endIndex,
+			sectionLines: lines.slice(startIndex + 1, endIndex),
+		};
+	}
+
+	function splitGroupBlocks(sectionLines) {
+		const blocks = [];
+		let currentLines = [];
+
+		for (const line of sectionLines) {
+			if (groupStartPattern.test(line)) {
+				if (currentLines.length > 0) {
+					blocks.push(currentLines);
+				}
+				currentLines = [line];
+				continue;
+			}
+			if (currentLines.length === 0) {
+				continue;
+			}
+			currentLines.push(line);
+		}
+
+		if (currentLines.length > 0) {
+			blocks.push(currentLines);
+		}
+
+		return blocks;
+	}
+
+	function parseGroupBlock(blockLines) {
+		const text = blockLines.join('\n');
+		const nameMatch = text.match(/name:\s*([^,\n}]+?)(?=\s*,\s*type:)/s);
+		const proxiesMatch = text.match(/proxies:\s*\[([\s\S]*?)\]/m);
+
+		if (!nameMatch || !proxiesMatch) {
+			return null;
+		}
+
+		return {
+			text,
+			name: nameMatch[1].trim().replace(/^['"]|['"]$/g, ''),
+			proxies: splitGroupItems(proxiesMatch[1]),
+		};
+	}
+
+	function replaceProxies(blockText, proxies) {
+		return blockText.replace(/proxies:\s*\[[\s\S]*?\]/m, `proxies: [${proxies.join(', ')}]`);
+	}
+
+	const lines = content.split('\n');
+	const sectionStartIndex = lines.findIndex(line => groupSectionPattern.test(line.trim()));
+
+	if (sectionStartIndex === -1) {
+		return content;
+	}
+
+	const { startIndex, endIndex, sectionLines } = readGroupSection(lines, sectionStartIndex);
+	const parsedBlocks = splitGroupBlocks(sectionLines)
+		.map(parseGroupBlock)
+		.filter(Boolean);
+
+	if (parsedBlocks.length === 0) {
+		return content;
+	}
+
+	const deletedGroupNames = new Set(
+		parsedBlocks
+			.filter(group => countryGroupPattern.test(group.name) && group.proxies.length === 1 && group.proxies[0] === 'DIRECT')
+			.map(group => group.name),
+	);
+
+	let changed = deletedGroupNames.size > 0;
+	while (changed) {
+		changed = false;
+		for (const group of parsedBlocks) {
+			if (deletedGroupNames.has(group.name)) {
+				continue;
+			}
+			const remainingProxies = group.proxies.filter(proxyName => !deletedGroupNames.has(proxyName));
+			if (remainingProxies.length === 0) {
+				deletedGroupNames.add(group.name);
+				changed = true;
+			}
+		}
+	}
+
+	if (deletedGroupNames.size === 0) {
+		return content;
+	}
+
+	const renderedBlocks = parsedBlocks
+		.filter(group => !deletedGroupNames.has(group.name))
+		.map(group => {
+			const remainingProxies = group.proxies.filter(proxyName => !deletedGroupNames.has(proxyName));
+			return replaceProxies(group.text, remainingProxies);
+		});
+
+	const rebuiltLines = [
+		...lines.slice(0, startIndex + 1),
+		...renderedBlocks,
+		...lines.slice(endIndex),
+	];
+
+	return rebuiltLines.join('\n');
+}
+
 let userID = '';
 let proxyIP = '';
 let sub = 'vmess2clash.pages.dev/?serect_key=swimmingliu';
@@ -1485,6 +1622,8 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, env
 		console.log(`虚假HOST: ${fakeHostName}`);
 		let url = `${subProtocol}://${sub_url}`;
 		let isBase64 = true;
+		const isClashSubscription = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'));
+		const isSingboxSubscription = userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'));
 
 		if (!sub || sub == "") {
 			if (hostName.includes('workers.dev')) {
@@ -1522,10 +1661,10 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, env
 		}
 
 		if (!userAgent.includes(('CF-Workers-SUB').toLowerCase())) {
-			if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
+			if (isClashSubscription) {
 				url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
-			} else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
+			} else if (isSingboxSubscription) {
 				url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
 			}
@@ -1542,6 +1681,10 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, env
 					}
 				});
 				content = await response.text();
+			}
+
+			if (!isBase64 && isClashSubscription) {
+				content = pruneEmptyClashGroups(content);
 			}
 
 			return content;
