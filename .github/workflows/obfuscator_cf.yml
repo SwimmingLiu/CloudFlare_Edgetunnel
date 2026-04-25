@@ -1,10 +1,14 @@
 name: Obfuscate CloudFlare
 
 on:
-    #push:
-    #    paths:
-    #        - '明文源码.js'
-    workflow_dispatch:
+  push:
+    paths:
+      - "cloudflare.js"
+  workflow_dispatch:
+
+concurrency:
+  group: edgetunnel-worker-publish-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   obfuscate:
@@ -16,6 +20,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          ref: ${{ github.ref_name }}
 
       - name: Use Node.js
         uses: actions/setup-node@v3
@@ -27,7 +32,8 @@ jobs:
 
       - name: Obfuscate code
         run: |
-          javascript-obfuscator cloudflare.js --output cloudflare_worker.js \
+          mkdir -p pages
+          javascript-obfuscator cloudflare.js --output pages/cloudflare_worker.js \
           --compact true \
           --control-flow-flattening true \
           --control-flow-flattening-threshold 1 \
@@ -40,16 +46,19 @@ jobs:
           --string-array-threshold 1 \
           --transform-object-keys true \
           --unicode-escape-sequence true
+          cp pages/cloudflare_worker.js pages/_worker.js
+          rm -f pages/cloudflare_worker.zip
+          zip -q -j pages/cloudflare_worker.zip pages/_worker.js
 
       - name: Commit changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add cloudflare_worker.js
+          git add pages/cloudflare_worker.js pages/_worker.js pages/cloudflare_worker.zip
           git commit -m "Obfuscate cloudflare_worker.js" || echo "No changes to commit"
 
       - name: Push changes
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref }}
+          branch: ${{ github.ref_name }}
