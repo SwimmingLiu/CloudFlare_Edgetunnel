@@ -1683,7 +1683,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, env
 				content = await response.text();
 			}
 
-			if (!isBase64 && isClashSubscription) {
+			if (!isBase64 || isClashSubscription) {
 				content = pruneEmptyClashGroups(content);
 			}
 
