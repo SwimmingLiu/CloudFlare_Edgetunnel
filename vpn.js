@@ -237,7 +237,7 @@ function pruneEmptyClashGroups(content) {
 
 let userID = '';
 let proxyIP = '';
-let sub = 'vmess2clash.pages.dev/?serect_key=swimmingliu';
+let sub = 'vms-nodes.pages.dev/?serect_key=swimmingliu';
 let sub_url = sub;
 let subConverter = 'SUBAPI.fxxk.dedyn.io';
 let subConfig = "https://raw.githubusercontent.com/SwimmingLiu/ClashConfig/master/ACL4SSR_Online_Full_MultiMode.ini";

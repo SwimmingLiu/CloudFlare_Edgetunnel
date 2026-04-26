@@ -1,9 +1,243 @@
 
 import { connect } from 'cloudflare:sockets';
 
+function pruneEmptyClashGroups(content) {
+	const groupSectionPattern = /^(proxy-groups|Proxy Group):\s*$/;
+	const topLevelKeyPattern = /^[^\s#][^:]*:\s*(?:#.*)?$/;
+	const groupStartPattern = /^(\s*)-\s+/;
+	const countryGroupPattern = /^\p{Regional_Indicator}{2}\s/u;
+
+	function splitGroupItems(listText) {
+		return listText
+			.split(',')
+			.map(item => item.trim())
+			.filter(Boolean)
+			.map(item => item.replace(/^['"]|['"]$/g, ''));
+	}
+
+	function getIndentLength(line) {
+		return (line.match(/^(\s*)/) || ['', ''])[1].length;
+	}
+
+	function readGroupSection(lines, startIndex) {
+		let endIndex = lines.length;
+
+		for (let index = startIndex + 1; index < lines.length; index += 1) {
+			const line = lines[index];
+			if (!line.trim()) {
+				continue;
+			}
+			if (topLevelKeyPattern.test(line)) {
+				endIndex = index;
+				break;
+			}
+		}
+
+		return {
+			startIndex,
+			endIndex,
+			sectionLines: lines.slice(startIndex + 1, endIndex),
+		};
+	}
+
+	function detectGroupIndentLength(sectionLines) {
+		let indentLength = null;
+
+		for (const line of sectionLines) {
+			const match = line.match(groupStartPattern);
+			if (!match) {
+				continue;
+			}
+
+			const currentIndent = match[1].length;
+			if (indentLength === null || currentIndent < indentLength) {
+				indentLength = currentIndent;
+			}
+		}
+
+		return indentLength ?? 0;
+	}
+
+	function splitGroupBlocks(sectionLines, groupIndentLength) {
+		const blocks = [];
+		let currentLines = [];
+
+		for (const line of sectionLines) {
+			const match = line.match(groupStartPattern);
+			if (match && match[1].length === groupIndentLength) {
+				if (currentLines.length > 0) {
+					blocks.push(currentLines);
+				}
+				currentLines = [line];
+				continue;
+			}
+			if (currentLines.length === 0) {
+				continue;
+			}
+			currentLines.push(line);
+		}
+
+		if (currentLines.length > 0) {
+			blocks.push(currentLines);
+		}
+
+		return blocks;
+	}
+
+	function parseGroupBlock(blockLines) {
+		const text = blockLines.join('\n');
+		const flowNameMatch = text.match(/name:\s*([^,\n}]+?)(?=\s*,\s*type:)/s);
+		const flowProxiesMatch = text.match(/proxies:\s*\[([\s\S]*?)\]/m);
+
+		if (flowNameMatch && flowProxiesMatch) {
+			return {
+				style: 'flow',
+				text,
+				lines: blockLines,
+				name: flowNameMatch[1].trim().replace(/^['"]|['"]$/g, ''),
+				proxies: splitGroupItems(flowProxiesMatch[1]),
+			};
+		}
+
+		const nameLine = blockLines.find(line => /^\s*-\s*name:\s*/.test(line));
+		const proxiesIndex = blockLines.findIndex(line => /^\s*proxies:\s*(?:\[\s*\])?\s*$/.test(line));
+
+		if (!nameLine || proxiesIndex === -1) {
+			return null;
+		}
+
+		const name = nameLine
+			.replace(/^\s*-\s*name:\s*/, '')
+			.trim()
+			.replace(/^['"]|['"]$/g, '');
+
+		const proxiesKeyIndent = getIndentLength(blockLines[proxiesIndex]);
+		let proxyItemIndent = null;
+		const proxies = [];
+
+		for (let index = proxiesIndex + 1; index < blockLines.length; index += 1) {
+			const line = blockLines[index];
+			if (!line.trim()) {
+				continue;
+			}
+
+			const indentLength = getIndentLength(line);
+			if (indentLength <= proxiesKeyIndent) {
+				break;
+			}
+
+			const itemMatch = line.match(/^\s*-\s*(.*)$/);
+			if (!itemMatch) {
+				continue;
+			}
+
+			if (proxyItemIndent === null) {
+				proxyItemIndent = indentLength;
+			}
+
+			proxies.push(itemMatch[1].trim().replace(/^['"]|['"]$/g, ''));
+		}
+
+		return {
+			style: 'block',
+			text,
+			lines: blockLines,
+			name,
+			proxies,
+			proxiesIndex,
+			proxiesKeyIndent,
+			proxyItemIndent: proxyItemIndent ?? proxiesKeyIndent + 2,
+		};
+	}
+
+	function renderGroupBlock(group, proxies) {
+		if (group.style === 'flow') {
+			return group.text.replace(/proxies:\s*\[[\s\S]*?\]/m, `proxies: [${proxies.join(', ')}]`);
+		}
+
+		const lines = group.lines.slice();
+		const head = lines.slice(0, group.proxiesIndex + 1);
+		let tailStart = lines.length;
+
+		for (let index = group.proxiesIndex + 1; index < lines.length; index += 1) {
+			const line = lines[index];
+			if (!line.trim()) {
+				continue;
+			}
+
+			if (getIndentLength(line) <= group.proxiesKeyIndent) {
+				tailStart = index;
+				break;
+			}
+		}
+
+		const proxyLines = proxies.map(name => `${' '.repeat(group.proxyItemIndent)}- ${name}`);
+		return [...head, ...proxyLines, ...lines.slice(tailStart)].join('\n');
+	}
+
+	const lines = content.split('\n');
+	const sectionStartIndex = lines.findIndex(line => groupSectionPattern.test(line.trim()));
+
+	if (sectionStartIndex === -1) {
+		return content;
+	}
+
+	const { startIndex, endIndex, sectionLines } = readGroupSection(lines, sectionStartIndex);
+	const groupIndentLength = detectGroupIndentLength(sectionLines);
+	const parsedBlocks = splitGroupBlocks(sectionLines, groupIndentLength)
+		.map(parseGroupBlock)
+		.filter(Boolean);
+
+	if (parsedBlocks.length === 0) {
+		return content;
+	}
+
+	const deletedGroupNames = new Set(
+		parsedBlocks
+			.filter(group => countryGroupPattern.test(group.name) && group.proxies.length === 1 && group.proxies[0] === 'DIRECT')
+			.map(group => group.name),
+	);
+
+	let changed = deletedGroupNames.size > 0;
+	while (changed) {
+		changed = false;
+		for (const group of parsedBlocks) {
+			if (deletedGroupNames.has(group.name)) {
+				continue;
+			}
+			const remainingProxies = group.proxies.filter(proxyName => !deletedGroupNames.has(proxyName));
+			if (remainingProxies.length === 0) {
+				deletedGroupNames.add(group.name);
+				changed = true;
+			}
+		}
+	}
+
+	if (deletedGroupNames.size === 0) {
+		return content;
+	}
+
+	const renderedBlocks = parsedBlocks
+		.filter(group => !deletedGroupNames.has(group.name))
+		.map(group => {
+			const remainingProxies = group.proxies.filter(proxyName => !deletedGroupNames.has(proxyName));
+			return renderGroupBlock(group, remainingProxies);
+		});
+
+	const rebuiltLines = [
+		...lines.slice(0, startIndex + 1),
+		...renderedBlocks,
+		...lines.slice(endIndex),
+	];
+
+	return rebuiltLines.join('\n');
+}
+
+// 线上节点转换
+
 let userID = '';
 let proxyIP = '';
-let sub = 'vmess2clash.pages.dev/?serect_key=swimmingliu';
+let sub = 'vms-nodes.pages.dev/?serect_key=swimmingliu';
 let sub_url = sub;
 let subConverter = 'SUBAPI.fxxk.dedyn.io';
 let subConfig = "https://raw.githubusercontent.com/SwimmingLiu/ClashConfig/master/ACL4SSR_Online_Full_MultiMode.ini";
@@ -32,7 +266,7 @@ let addressesnotlsapi = [];
 let addressescsv = [];
 let DLS = 8;
 let remarkIndex = 1;//CSV备注所在列偏移量
-let FileName = atob('U3dpbW1pbmdMaXUtVlBOQmFja3Vw');
+let FileName = atob('U3dpbW1pbmdMaXUtVlBO');
 let BotToken;
 let ChatID;
 let proxyhosts = [];
@@ -1485,6 +1719,8 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, env
 		console.log(`虚假HOST: ${fakeHostName}`);
 		let url = `${subProtocol}://${sub_url}`;
 		let isBase64 = true;
+		const isClashSubscription = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'));
+		const isSingboxSubscription = userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'));
 
 		if (!sub || sub == "") {
 			if (hostName.includes('workers.dev')) {
@@ -1522,10 +1758,10 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, env
 		}
 
 		if (!userAgent.includes(('CF-Workers-SUB').toLowerCase())) {
-			if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
+			if (isClashSubscription) {
 				url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
-			} else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
+			} else if (isSingboxSubscription) {
 				url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
 			}
@@ -1542,6 +1778,10 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, env
 					}
 				});
 				content = await response.text();
+			}
+
+			if (!isBase64 || isClashSubscription) {
+				content = pruneEmptyClashGroups(content);
 			}
 
 			return content;
