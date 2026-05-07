@@ -233,7 +233,7 @@ function pruneEmptyClashGroups(content) {
 	return rebuiltLines.join('\n');
 }
 
-// 线上节点转换--
+// 线上节点转换
 
 let userID = '';
 let proxyIP = '';
